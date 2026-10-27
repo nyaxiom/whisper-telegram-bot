@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+# Offline speech-to-text using ffmpeg and whisper.cpp. Outputs <input-stem>.txt.
+set -euo pipefail
+if [[ $# -ne 1 ]]; then
+  echo "Usage: transcribe /path/to/audio.mp3" >&2
+  exit 2
+fi
+INPUT=$(realpath -- "$1")
+if [[ ! -f "$INPUT" ]]; then
+  echo "Audio file not found: $INPUT" >&2
+  exit 1
+fi
+MODEL="${WHISPER_MODEL:-$HOME/.local/share/whisper/models/ggml-small.bin}"
+if [[ ! -f "$MODEL" ]]; then
+  echo "Whisper model not found: $MODEL" >&2
+  exit 1
+fi
+OUTPUT="${INPUT%.*}"
+TEMP=$(mktemp --suffix=.wav)
+trap 'rm -f -- "$TEMP"' EXIT
+ffmpeg -nostdin -v error -y -i "$INPUT" -ar 16000 -ac 1 -c:a pcm_s16le "$TEMP"
+whisper-cli -m "$MODEL" -f "$TEMP" -l "${WHISPER_LANGUAGE:-auto}" -t "${WHISPER_THREADS:-8}" -otxt -of "$OUTPUT"
